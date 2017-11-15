@@ -2,14 +2,11 @@
 
 begin
   require 'aws-sdk'
-  require 'optparse'
+  require 'OptionParser'
   require 'pry'
 rescue LoadError
-  puts 'You don\'t have the aws-sdk, optparse or the pry gem installed, please do one or more of the following'
-  puts 'gem install aws-sdk'
-  puts 'gem install optparse'
-  puts 'gem install pry'
-  puts 'and try again.'
+  puts 'Gem load error!'
+  puts 'Run bundle install and then try again'
 end
 
 STDOUT.sync = true # We want to flush output immediately
