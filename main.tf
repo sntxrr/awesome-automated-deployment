@@ -9,14 +9,14 @@ resource "aws_elb" "web-blue" {
   connection_draining_timeout = 310
 
   listener {
-    instance_port     = 8080
+    instance_port     = 80
     instance_protocol = "http"
     lb_port           = 80
     lb_protocol       = "http"
   }
 
   listener {
-    instance_port      = 8080
+    instance_port      = 443
     instance_protocol  = "http"
     lb_port            = 443
     lb_protocol        = "https"
@@ -49,14 +49,14 @@ resource "aws_elb" "web-blue" {
   connection_draining_timeout = 310
 
   listener {
-    instance_port     = 8080
+    instance_port     = 80
     instance_protocol = "http"
     lb_port           = 80
     lb_protocol       = "http"
   }
 
   listener {
-    instance_port      = 8080
+    instance_port      = 443
     instance_protocol  = "http"
     lb_port            = 443
     lb_protocol        = "https"
@@ -249,6 +249,26 @@ resource "aws_autoscaling_group" "green" {
   count                     = "${var.allocate_green_asg}"
 }
 
+resource "aws_launch_configuration" "web" {
+  image_id             = "${var.ami}"
+  security_groups      = ["${compact(split(",", "${var.instance_security_group_ids}"))}"]
+  instance_type        = "${var.instance_type}"
+  user_data            = "${element(list(var.user_data, data.template_file.user_data.rendered), var.use_default_user_data)}"
+  key_name             = "${var.key_name}"
+  ebs_optimized        = "${var.ebs_optimized}"
+  iam_instance_profile = "${aws_iam_instance_profile.instance_profile.name}"
+
+  root_block_device {
+    volume_type           = "${var.root_block_type}"
+    volume_size           = "${var.root_block_size}"
+    delete_on_termination = true
+  }
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = ["image_id", "key_name"]
+  }
+}
 
 output "elb_dns_name" {
   value = "${aws_elb.web.dns_name}"
