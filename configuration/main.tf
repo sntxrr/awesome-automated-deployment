@@ -37,6 +37,7 @@ resource "aws_elb" "web-blue" {
     service        = "${var.company_name}-${var.service_name}"
     environment = "${var.environment}"
   }
+}
 
   resource "aws_elb" "web-green" {
   count                       = "${var.allocate_elb}"
@@ -77,6 +78,7 @@ resource "aws_elb" "web-blue" {
     service        = "${var.company_name}-${var.service_name}"
     environment = "${var.environment}"
   }
+}
 
 # Autoscaling policy for scale down
 resource "aws_autoscaling_policy" "web_scaledown" {
@@ -280,3 +282,4 @@ output "elb_zone_id" {
 
 output "asg_names" {
   value = "${aws_autoscaling_group.blue.name},${aws_autoscaling_group.green.name}"
+}
