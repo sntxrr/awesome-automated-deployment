@@ -148,7 +148,7 @@ resource "aws_autoscaling_group" "blue" {
   health_check_type         = "${element(split(",","EC2,${var.health_check_type}"),var.allocate_elb)}"
   force_delete              = false
   launch_configuration      = "${aws_launch_configuration.web.name}"
-  load_balancers            = ["${compact(split(",", "${join("",aws_elb.web*.name)},${var.asg_load_balancers}"))}"]
+  load_balancers            = ["${compact(split(",", "${join("",aws_elb.web-blue.name)},${var.asg_load_balancers}"))}"]
 
   tag                       = {
     key                 = "${element(split(",","active,not_active"), var.is_in_green_mode)}"
@@ -205,7 +205,7 @@ resource "aws_autoscaling_group" "green" {
   health_check_type         = "${element(split(",","EC2,${var.health_check_type}"),var.allocate_elb)}"
   force_delete              = false
   launch_configuration      = "${aws_launch_configuration.web.name}"
-  load_balancers            = ["${compact(split(",", "${join("",aws_elb.web.*.name)},${var.asg_load_balancers}"))}"]
+  load_balancers            = ["${compact(split(",", "${join("",aws_elb.web-green.name)},${var.asg_load_balancers}"))}"]
 
   tag                       = {
     key                 = "${element(split(",","not_active,active"), var.is_in_green_mode)}"
