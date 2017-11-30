@@ -112,9 +112,9 @@ resource "aws_cloudwatch_metric_alarm" "web_scaledown" {
   statistic           = "Average"
   threshold           = "${var.scale_down_threshold}"
   dimensions {
-    LoadBalancerName = "${aws_elb.web.name}"
+    LoadBalancerName = "${aws_elb.web*.name}"
   }
-  alarm_description   = "This metric monitors unhealthy hosts in ${aws_elb.web.name}"
+  alarm_description   = "This metric monitors unhealthy hosts in ${aws_elb.web*.name}"
   alarm_actions       = ["${element(aws_autoscaling_policy.web_scaledown.*.arn, count.index)}"]
 }
 
@@ -148,7 +148,7 @@ resource "aws_autoscaling_group" "blue" {
   health_check_type         = "${element(split(",","EC2,${var.health_check_type}"),var.allocate_elb)}"
   force_delete              = false
   launch_configuration      = "${aws_launch_configuration.web.name}"
-  load_balancers            = ["${compact(split(",", "${join("",aws_elb.web.*.name)},${var.asg_load_balancers}"))}"]
+  load_balancers            = ["${compact(split(",", "${join("",aws_elb.web-blue.name)},${var.asg_load_balancers}"))}"]
 
   tag                       = {
     key                 = "${element(split(",","active,not_active"), var.is_in_green_mode)}"
@@ -205,7 +205,7 @@ resource "aws_autoscaling_group" "green" {
   health_check_type         = "${element(split(",","EC2,${var.health_check_type}"),var.allocate_elb)}"
   force_delete              = false
   launch_configuration      = "${aws_launch_configuration.web.name}"
-  load_balancers            = ["${compact(split(",", "${join("",aws_elb.web.*.name)},${var.asg_load_balancers}"))}"]
+  load_balancers            = ["${compact(split(",", "${join("",aws_elb.web-green.name)},${var.asg_load_balancers}"))}"]
 
   tag                       = {
     key                 = "${element(split(",","not_active,active"), var.is_in_green_mode)}"
@@ -250,12 +250,12 @@ resource "aws_autoscaling_group" "green" {
 
   count                     = "${var.allocate_green_asg}"
 }
-
+# A shared launch configuration
 resource "aws_launch_configuration" "web" {
   image_id             = "${var.ami}"
   security_groups      = ["${compact(split(",", "${var.instance_security_group_ids}"))}"]
   instance_type        = "${var.instance_type}"
-  user_data            = "${element(list(var.user_data, data.template_file.user_data.rendered), var.use_default_user_data)}"
+  user_data            = "${element(var.user_data, var.use_default_user_data)}"
   key_name             = "${var.key_name}"
   ebs_optimized        = "${var.ebs_optimized}"
   iam_instance_profile = "${aws_iam_instance_profile.instance_profile.name}"
@@ -272,12 +272,56 @@ resource "aws_launch_configuration" "web" {
   }
 }
 
-output "elb_dns_name" {
-  value = "${aws_elb.web.dns_name}"
+# Instance profile
+resource "aws_iam_instance_profile" "instance_profile" {
+  name = "${var.service_name}-instance-profile-${var.environment}"
+  role = "${aws_iam_role.instance_role.name}"
 }
 
-output "elb_zone_id" {
-  value = "${aws_elb.web.zone_id}"
+# Attach IAM policy to instance
+resource "aws_iam_policy_attachment" "lr-role-policy-attach" {
+  count      = "${var.has_custom_role_policy}"
+  name       = "${var.service_name}-role-policy-attachment-${var.environment}"
+  roles      = ["${aws_iam_role.instance_role.name}"]
+  policy_arn = "${var.custom_role_policy_arn}"
+}
+
+# Let instances assume a role - important if you're using vault
+resource "aws_iam_role" "instance_role" {
+  name               = "${var.service_name}-${var.environment}"
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+}
+
+# Output some stuff
+output "blue_elb_dns_name" {
+  value = "${aws_elb.web-blue.dns_name}"
+}
+
+output "blue_elb_zone_id" {
+  value = "${aws_elb.web-blue.zone_id}"
+}
+
+
+output "green_elb_dns_name" {
+  value = "${aws_elb.web-green.dns_name}"
+}
+
+output "green_elb_zone_id" {
+  value = "${aws_elb.web-green.zone_id}"
 }
 
 output "asg_names" {
