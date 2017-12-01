@@ -33,13 +33,13 @@ resource "aws_elb" "web-blue" {
 
   cross_zone_load_balancing   = true
 
-  tags                        = {
+  tags                        = { 
     service        = "${var.company_name}-${var.service_name}"
     environment = "${var.environment}"
   }
 }
 
-  resource "aws_elb" "web-green" {
+resource "aws_elb" "web-green" { 
   count                       = "${var.allocate_elb}"
   name                        = "${var.service_name}-${var.environment}"
   subnets                     = ["${split(",", var.elb_subnets)}"]
@@ -101,7 +101,7 @@ resource "aws_autoscaling_policy" "web_scaleup" {
 }
 
 # Alarm to scale down if there are more healthy instances than we expect
-resource "aws_cloudwatch_metric_alarm" "web_scaledown" {
+resource "aws_cloudwatch_metric_alarm" "web_scaledown_blue" {
   count               = "${element(split(",","0,2"), var.do_scale)}"
   alarm_name          = "${var.service_name}-${var.environment}${element(split(",",",_green"), count.index)}-scaledown"
   comparison_operator = "LessThanOrEqualToThreshold"
@@ -112,9 +112,27 @@ resource "aws_cloudwatch_metric_alarm" "web_scaledown" {
   statistic           = "Average"
   threshold           = "${var.scale_down_threshold}"
   dimensions {
-    LoadBalancerName = "${aws_elb.web*.name}"
+    LoadBalancerName = "${aws_elb.web-green.name}"
   }
-  alarm_description   = "This metric monitors unhealthy hosts in ${aws_elb.web*.name}"
+  alarm_description   = "This metric monitors unhealthy hosts in ${aws_elb.web-green.name}"
+  alarm_actions       = ["${element(aws_autoscaling_policy.web_scaledown.*.arn, count.index)}"]
+}
+
+# Alarm to scale down if there are more healthy instances than we expect
+resource "aws_cloudwatch_metric_alarm" "web_scaledown_green" {
+  count               = "${element(split(",","0,2"), var.do_scale)}"
+  alarm_name          = "${var.service_name}-${var.environment}${element(split(",",",_blue"), count.index)}-scaledown"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = "${var.scale_down_consecutive_periods}"
+  metric_name         = "UnHealthyHostCount"
+  namespace           = "AWS/EC2"
+  period              = "${var.scale_down_period}"
+  statistic           = "Average"
+  threshold           = "${var.scale_down_threshold}"
+  dimensions {
+    LoadBalancerName = "${aws_elb.web-blue.name}"
+  }
+  alarm_description   = "This metric monitors unhealthy hosts in ${aws_elb.web-blue.name}"
   alarm_actions       = ["${element(aws_autoscaling_policy.web_scaledown.*.arn, count.index)}"]
 }
 
@@ -130,9 +148,9 @@ resource "aws_cloudwatch_metric_alarm" "web_scaleup" {
   statistic           = "Average"
   threshold           = "${var.scale_up_threshold}"
   dimensions {
-    LoadBalancerName = "${aws_elb.web.name}"
+    LoadBalancerName = "${aws_elb.web-green.name}"
   }
-  alarm_description   = "This metric monitors healthy hosts in ${aws_elb.web.name}"
+  alarm_description   = "This metric monitors healthy hosts in ${aws_elb.web-green.name}"
   alarm_actions       = ["${element(aws_autoscaling_policy.web_scaleup.*.arn, count.index)}"]
 }
 
@@ -192,7 +210,6 @@ resource "aws_autoscaling_group" "blue" {
   }
 }
 
-
 # GREEN autoscaling group
 resource "aws_autoscaling_group" "green" {
   availability_zones        = ["${split(",", var.availability_zones)}"]
@@ -250,6 +267,7 @@ resource "aws_autoscaling_group" "green" {
 
   count                     = "${var.allocate_green_asg}"
 }
+
 # A shared launch configuration
 resource "aws_launch_configuration" "web" {
   image_id             = "${var.ami}"
@@ -314,7 +332,6 @@ output "blue_elb_dns_name" {
 output "blue_elb_zone_id" {
   value = "${aws_elb.web-blue.zone_id}"
 }
-
 
 output "green_elb_dns_name" {
   value = "${aws_elb.web-green.dns_name}"
